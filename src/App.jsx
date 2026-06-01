@@ -71,6 +71,16 @@ function StopIcon({ className }) {
   );
 }
 
+function UploadIcon({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
 function Spinner() {
   return (
     <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24" fill="none">
@@ -94,6 +104,7 @@ export default function App() {
   const chunks = useRef([]);
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   /* ── cleanup on unmount ── */
   useEffect(() => {
@@ -183,6 +194,36 @@ export default function App() {
     }
   };
 
+  /* ── file upload handler ── */
+  const handleFileUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset previous state
+    setResult(null);
+    setError(null);
+    setLoading(true);
+
+    try {
+      const form = new FormData();
+      form.append("file", file, file.name);
+
+      const res = await fetch(API_URL, { method: "POST", body: form });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `Server responded with ${res.status}`);
+      }
+      const data = await res.json();
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      // Reset the input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, []);
+
   /* ── derived ── */
   const isHealthy = result?.prediction === "Healthy";
   const confidencePct = result ? Math.round(result.confidence * 100) : 0;
@@ -234,11 +275,43 @@ export default function App() {
           </button>
         </div>
 
+        {/* divider */}
+        <div className="flex items-center gap-3 w-full" style={{ color: "var(--color-text-muted)" }}>
+          <div className="flex-1 h-px" style={{ background: "var(--color-card-border)" }} />
+          <span className="text-xs font-medium uppercase tracking-widest">or</span>
+          <div className="flex-1 h-px" style={{ background: "var(--color-card-border)" }} />
+        </div>
+
+        {/* upload button */}
+        <input
+          ref={fileInputRef}
+          id="file-input"
+          type="file"
+          accept="audio/wav, audio/x-wav, .wav"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        <button
+          id="upload-btn"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading || recording}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer focus:outline-none focus:ring-4"
+          style={{
+            background: "transparent",
+            color: "var(--color-accent)",
+            border: "1.5px solid var(--color-accent)",
+            opacity: loading || recording ? 0.4 : 1,
+          }}
+        >
+          <UploadIcon className="w-4 h-4" />
+          Upload .WAV File
+        </button>
+
         {/* status text */}
         <p className="text-sm font-medium h-5" style={{ color: "var(--color-text-muted)" }}>
           {recording && `Recording… ${countdown}s remaining`}
           {loading && "Analyzing…"}
-          {!recording && !loading && !result && !error && "Tap the mic to start"}
+          {!recording && !loading && !result && !error && "Tap the mic or upload a file"}
         </p>
 
         {/* loading spinner */}
